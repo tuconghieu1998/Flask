@@ -11,15 +11,11 @@ app = Flask(__name__)
 
 app.config['SERVER'] = os.getenv('SERVER')
 app.config['DATABASE'] = os.getenv('DATABASE')
-app.config['USERNAME'] = os.getenv('USERNAME')
-app.config['PASSWORD'] = os.getenv('PASSWORD')
+app.config['DB_USERNAME'] = os.getenv('DB_USERNAME')
+app.config['DB_PASSWORD'] = os.getenv('DB_PASSWORD')
 
 # Cấu hình kết nối đến SQL Server
-server = "SERVER-MRO"
-database = "ESP32"
-username = "sa"
-password = "123456"
-conn_str = f"DRIVER={{SQL Server}};SERVER={app.config['SERVER']};DATABASE={app.config['DATABASE']};UID={app.config['USERNAME']};PWD={app.config['PASSWORD']}"
+conn_str = f"DRIVER={{SQL Server}};SERVER={app.config['SERVER']};DATABASE={app.config['DATABASE']};UID={app.config['DB_USERNAME']};PWD={app.config['DB_PASSWORD']}"
 
 def save_to_db(sensor_id, temp, hum, sound, light, factory, location):
     try:
