@@ -82,10 +82,10 @@ def check_warning(sensor_id, temperature, humidity, sound, light, factory, locat
         print("check_warning", temperature, humidity, app.config['TEMP_WARNING'], app.config['HUM_WARNING'])
         current_time = datetime.now().strftime("%H:%M:%S %d/%m/%Y")
         if temperature >= float(app.config['TEMP_WARNING']):
-            alert_message = f"🔥 High Temperature Warning! <strong>{temperature}°C</strong>.\n[<strong>Factory {factory}</strong>][<strong>{sensor_id}</strong>]\n[{current_time}]"
+            alert_message = f"[{current_time}]\n🔥 High Temperature Warning! <strong>{temperature}°C</strong> at <strong>Factory {factory}</strong>, <strong>{sensor_id}</strong>]."
             send_telegram_message(alert_message)
         if humidity >= float(app.config['HUM_WARNING']):
-            alert_message = f"💧 High Humidity Warning! <strong>{humidity}%</strong>.\n[<strong>Factory {factory}</strong>][<strong>{sensor_id}</strong>]\n[{current_time}]"
+            alert_message = f"[{current_time}]\n💧 High Humidity Warning! <strong>{humidity}%</strong> at <strong>Factory {factory}</strong>, <strong>{sensor_id}</strong>]."
             send_telegram_message(alert_message)
     except Exception as e:
         print(e)
