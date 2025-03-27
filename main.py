@@ -4,6 +4,8 @@ import pyodbc
 from datetime import datetime
 from dotenv import load_dotenv
 import os
+import requests
+import threading
 
 load_dotenv()
 
@@ -13,6 +15,10 @@ app.config['SERVER'] = os.getenv('SERVER')
 app.config['DATABASE'] = os.getenv('DATABASE')
 app.config['DB_USERNAME'] = os.getenv('DB_USERNAME')
 app.config['DB_PASSWORD'] = os.getenv('DB_PASSWORD')
+app.config['TELEGRAM_BOT_TOKEN'] = os.getenv('TELEGRAM_BOT_TOKEN')
+app.config['CHAT_ID'] = os.getenv('CHAT_ID')
+app.config['TEMP_WARNING'] = os.getenv('TEMP_WARNING')
+app.config['HUM_WARNING'] = os.getenv('HUM_WARNING')
 
 # Cấu hình kết nối đến SQL Server
 conn_str = f"DRIVER={{SQL Server}};SERVER={app.config['SERVER']};DATABASE={app.config['DATABASE']};UID={app.config['DB_USERNAME']};PWD={app.config['DB_PASSWORD']}"
@@ -61,12 +67,28 @@ def upload():
         light = data.get("light")
         factory = data.get("factory")
         location = data.get("location")
-        if save_to_db(sensor_id, temperature, humidity, sound, light, factory, location):
+
+        isSuccess = save_to_db(sensor_id, temperature, humidity, sound, light, factory, location)
+        check_warning(sensor_id, temperature, humidity, sound, light, factory, location)
+        if isSuccess:
             return jsonify({"status": "success"}), 200
         return jsonify({"status": "fail"}), 400
     except Exception as e:
         print(e)
         return jsonify({"status": "fail"}), 400
+    
+def check_warning(sensor_id, temperature, humidity, sound, light, factory, location):
+    try : 
+        print("check_warning", temperature, humidity, app.config['TEMP_WARNING'], app.config['HUM_WARNING'])
+        current_time = datetime.now().strftime("%H:%M:%S %d/%m/%Y")
+        if temperature >= float(app.config['TEMP_WARNING']):
+            alert_message = f"🔥 High Temperature Warning! <strong>{temperature}°C</strong>.\n[<strong>Factory {factory}</strong>][<strong>{sensor_id}</strong>]\n[{current_time}]"
+            send_telegram_message(alert_message)
+        if humidity >= float(app.config['HUM_WARNING']):
+            alert_message = f"💧 High Humidity Warning! <strong>{humidity}%</strong>.\n[<strong>Factory {factory}</strong>][<strong>{sensor_id}</strong>]\n[{current_time}]"
+            send_telegram_message(alert_message)
+    except Exception as e:
+        print(e)
     
 
 @app.route('/', methods=['GET'])
@@ -101,6 +123,25 @@ def get_all_data():
         return json.dumps(rows, default=serialize_datetime)
     except Exception as e:
         return jsonify({"error": str(e)})
+    
+def send_telegram_message(message):
+    """ Sends a Telegram message asynchronously using a separate thread. """
+    def send():
+        try:
+            url = f"https://api.telegram.org/bot{app.config['TELEGRAM_BOT_TOKEN']}/sendMessage"
+            payload = {
+                "chat_id": app.config['CHAT_ID'], 
+                "text": message, 
+                "parse_mode": "HTML"
+            }
+            response = requests.post(url, json=payload)
+            response.raise_for_status()
+            print("Telegram message sent successfully!")
+        except requests.exceptions.RequestException as e:
+            print(f"Error sending Telegram message: {e}")
+
+    # Run the function in a new thread
+    threading.Thread(target=send, daemon=True).start()
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000)
