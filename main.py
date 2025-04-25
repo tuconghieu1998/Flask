@@ -20,32 +20,17 @@ app.config['CHAT_ID'] = os.getenv('CHAT_ID')
 app.config['TEMP_WARNING'] = os.getenv('TEMP_WARNING')
 app.config['HUM_WARNING'] = os.getenv('HUM_WARNING')
 
+table_name = "sensor_data"
+table_name_test = "sensor_data_test"
 # Cấu hình kết nối đến SQL Server
 conn_str = f"DRIVER={{SQL Server}};SERVER={app.config['SERVER']};DATABASE={app.config['DATABASE']};UID={app.config['DB_USERNAME']};PWD={app.config['DB_PASSWORD']}"
 
-def save_to_db(sensor_id, temp, hum, sound, light, factory, location):
+def save_to_db(table, sensor_id, temp, hum, sound, light, factory, location, timestamp):
     try:
         conn = pyodbc.connect(conn_str)
         cursor = conn.cursor()
-        cursor.execute("""
-            IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='sensor_data_test' AND xtype='U')
-            CREATE TABLE sensor_data_test (
-                id INT IDENTITY(1,1) PRIMARY KEY,
-                sensor_id NCHAR(10) NOT NULL,
-                temperature FLOAT NOT NULL,
-                humidity FLOAT NOT NULL,
-                sound FLOAT NOT NULL,
-                light FLOAT NOT NULL,
-                factory NCHAR(10) NOT NULL,
-                location NCHAR(10) NOT NULL,
-                timestamp DATETIME NOT NULL
-            );
-        """)
-        conn.commit()
-
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-        cursor.execute("INSERT INTO sensor_data_test (sensor_id, temperature, humidity, sound, light, factory, location, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        
+        cursor.execute(f"INSERT INTO {table} (sensor_id, temperature, humidity, sound, light, factory, location, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                        (sensor_id, temp, hum, sound, light, factory, location, timestamp))
         conn.commit()
         conn.close()
@@ -57,7 +42,10 @@ def save_to_db(sensor_id, temp, hum, sound, light, factory, location):
 @app.route('/upload', methods=['POST'])
 def upload():
     try:
-        print("UPLOAD", request.get_json())
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        print("UPLOAD RAW", timestamp, request.data)
+        print("UPLOAD", timestamp, request.get_json())
         data = request.get_json()
     
         sensor_id = data.get("sensor_id")
@@ -68,7 +56,33 @@ def upload():
         factory = data.get("factory")
         location = data.get("location")
 
-        isSuccess = save_to_db(sensor_id, temperature, humidity, sound, light, factory, location)
+        isSuccess = save_to_db(table_name, sensor_id, temperature, humidity, sound, light, factory, location, timestamp)
+        check_warning(sensor_id, temperature, humidity, sound, light, factory, location)
+        if isSuccess:
+            return jsonify({"status": "success"}), 200
+        return jsonify({"status": "fail"}), 400
+    except Exception as e:
+        print(e)
+        return jsonify({"status": "fail"}), 400
+    
+@app.route('/upload-test', methods=['POST'])
+def upload_test():
+    try:
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        print("UPLOAD RAW TEST", timestamp, request.data)
+        print("UPLOAD TEST", timestamp, request.get_json())
+        data = request.get_json()
+    
+        sensor_id = data.get("sensor_id")
+        temperature = data.get("temperature")
+        humidity = data.get("humidity")
+        sound = data.get("sound")
+        light = data.get("light")
+        factory = data.get("factory")
+        location = data.get("location")
+
+        isSuccess = save_to_db(table_name_test, sensor_id, temperature, humidity, sound, light, factory, location, timestamp)
         check_warning(sensor_id, temperature, humidity, sound, light, factory, location)
         if isSuccess:
             return jsonify({"status": "success"}), 200
@@ -79,7 +93,6 @@ def upload():
     
 def check_warning(sensor_id, temperature, humidity, sound, light, factory, location):
     try : 
-        print("check_warning", temperature, humidity, app.config['TEMP_WARNING'], app.config['HUM_WARNING'])
         current_time = datetime.now().strftime("%H:%M:%S %d/%m/%Y")
         if temperature >= float(app.config['TEMP_WARNING']):
             alert_message = f"[{current_time}]\n🔥 High Temperature Warning! <strong>{temperature}°C</strong> at <strong>Factory {factory}</strong>, <strong>{sensor_id}</strong>."
@@ -115,11 +128,10 @@ def query_db(query, args=(), one=False):
 def get_all_data():
     try:
         rows = query_db("""SELECT * 
-        FROM sensor_data_test 
+        FROM sensor_data 
         ORDER BY id DESC
         OFFSET 0 ROWS FETCH NEXT 50 ROWS ONLY
         """)
-        print(rows)
         return json.dumps(rows, default=serialize_datetime)
     except Exception as e:
         return jsonify({"error": str(e)})
@@ -136,7 +148,6 @@ def send_telegram_message(message):
             }
             response = requests.post(url, json=payload)
             response.raise_for_status()
-            print("Telegram message sent successfully!")
         except requests.exceptions.RequestException as e:
             print(f"Error sending Telegram message: {e}")
 
